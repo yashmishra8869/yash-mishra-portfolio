@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { NextResponse } from "next/server";
 
 const attempts = new Map<string, number>();
@@ -5,6 +6,22 @@ const WINDOW_MS = 60_000;
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function getMailTransport() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT ?? "465");
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !Number.isInteger(port) || !user || !pass) return null;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
+  });
 }
 
 export async function POST(request: Request) {
@@ -35,28 +52,46 @@ export async function POST(request: Request) {
   if (previous && now - previous < WINDOW_MS) {
     return NextResponse.json({ error: "Please wait before sending another message." }, { status: 429 });
   }
+
+  const transport = getMailTransport();
+  const recipient = process.env.CONTACT_TO_EMAIL;
+  if (!transport || !recipient) {
+    return NextResponse.json({ error: "Contact email delivery is not configured yet." }, { status: 503 });
+  }
+
   attempts.set(clientKey, now);
   attempts.forEach((timestamp, key) => {
     if (now - timestamp >= WINDOW_MS) attempts.delete(key);
   });
 
-  if (!process.env.CONTACT_WEBHOOK_URL) {
-    return NextResponse.json({ error: "Contact delivery is not configured yet." }, { status: 503 });
-  }
-
-  let delivery: Response;
   try {
-    delivery = await fetch(process.env.CONTACT_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, subject, message })
+    await transport.sendMail({
+      from: process.env.SMTP_USER,
+      to: recipient,
+      replyTo: email,
+      subject: `Portfolio contact: ${subject}`,
+      text: `Name: ${name}\nEmail: ${email}\n\n${message}`
     });
   } catch {
     return NextResponse.json({ error: "Contact delivery failed. Please try again later." }, { status: 502 });
   }
-  if (!delivery.ok) {
-    return NextResponse.json({ error: "Contact delivery failed. Please try again later." }, { status: 502 });
+
+  try {
+    await transport.sendMail({
+      from: process.env.SMTP_USER,
+      to: email,
+      subject: "Thank you for contacting Yash Mishra",
+      text: "Thank you for contacting Yash Mishra. I have received your message and will get back to you soon."
+    });
+  } catch {
+    return NextResponse.json({
+      ok: true,
+      message: "Your message was delivered, but the acknowledgement email could not be sent."
+    });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    message: "Your message was delivered. An acknowledgement email has been sent."
+  });
 }

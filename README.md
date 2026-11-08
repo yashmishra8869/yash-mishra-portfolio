@@ -89,11 +89,15 @@ Open [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_GITHUB_URL` | Optional | Public GitHub link |
 | `NEXT_PUBLIC_LINKEDIN_URL` | Optional | Public LinkedIn link |
 | `NEXT_PUBLIC_DEV_URL` | Optional | Public DEV Community link |
-| `CONTACT_WEBHOOK_URL` | Optional | Server-only contact delivery webhook |
+| `SMTP_HOST` | Required for delivery | Server-only SMTP host, typically `smtp.gmail.com` |
+| `SMTP_PORT` | Required for delivery | Server-only SMTP port, typically `465` |
+| `SMTP_USER` | Required for delivery | Gmail address used by the server |
+| `SMTP_PASS` | Required for delivery | Gmail App Password; never use the account password |
+| `CONTACT_TO_EMAIL` | Required for delivery | Recipient address for portfolio messages |
 
 Only values prefixed with `NEXT_PUBLIC_` are exposed to the browser. Never put credentials, private keys, or provider tokens in public variables or committed files.
 
-The site builds and deploys without `CONTACT_WEBHOOK_URL`; the contact form reports that delivery is not configured instead of claiming a message was sent.
+The site builds and deploys without SMTP configuration; the contact form reports that delivery is not configured instead of claiming a message was sent. After the original message is accepted, the server sends the visitor an acknowledgement email. If that secondary message fails, the UI reports that the original was delivered but the acknowledgement was not sent.
 
 ## Quality checks
 
